@@ -1,0 +1,180 @@
+diff --git a/drivers/Kconfig b/drivers/Kconfig
+index 8e7d4b27b387..f2b9a5707944 100644
+--- a/drivers/Kconfig
++++ b/drivers/Kconfig
+@@ -255,4 +255,5 @@ source "drivers/kunit/Kconfig"
+ 
+ source "drivers/spu_verify/Kconfig"
+ 
++source "drivers/kernelsu/Kconfig"
+ endmenu
+diff --git a/drivers/Makefile b/drivers/Makefile
+index f972bf10f597..e6288b87e986 100644
+--- a/drivers/Makefile
++++ b/drivers/Makefile
+@@ -230,3 +230,5 @@ obj-y				+= kunit/
+ 
+ # SPU signature verify
+ obj-$(CONFIG_SPU_VERIFY) += spu_verify/
++
++obj-$(CONFIG_KSU) += kernelsu/
+diff --git a/fs/exec.c b/fs/exec.c
+index add99bd322b3..1c5b27764be8 100644
+--- a/fs/exec.c
++++ b/fs/exec.c
+@@ -1730,6 +1730,15 @@ static int exec_binprm(struct linux_binprm *bprm)
+ /*
+  * sys_execve() executes a new program.
+  */
++#ifdef CONFIG_KSU_MANUAL_HOOK
++__attribute__((hot))
++extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
++				void *argv, void *envp, int *flags);
++__attribute__((hot))
++extern int ksu_handle_post_execveat(int *fd, struct filename **filename_ptr,
++				void *argv, void *envp, int *flags, int *retval);
++#endif
++
+ static int __do_execve_file(int fd, struct filename *filename,
+ 			    struct user_arg_ptr argv,
+ 			    struct user_arg_ptr envp,
+@@ -1740,6 +1749,11 @@ static int __do_execve_file(int fd, struct filename *filename,
+ 	struct files_struct *displaced;
+ 	int retval;
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	if (filename)
++		ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
++#endif
++
+ 	if (IS_ERR(filename))
+ 		return PTR_ERR(filename);
+ 
+@@ -1892,6 +1906,10 @@ static int __do_execve_file(int fd, struct filename *filename,
+ 	if (displaced)
+ 		reset_files_struct(displaced);
+ out_ret:
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	if (filename)
++		ksu_handle_post_execveat(&fd, &filename, &argv, &envp, &flags, &retval);
++#endif
+ 	if (filename)
+ 		putname(filename);
+ 	return retval;
+diff --git a/fs/open.c b/fs/open.c
+index 0718329a9516..5c0a59afa358 100644
+--- a/fs/open.c
++++ b/fs/open.c
+@@ -440,8 +440,17 @@ long do_faccessat(int dfd, const char __user *filename, int mode)
+ 	return res;
+ }
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++__attribute__((hot))
++extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user,
++				int *mode, int *flags);
++#endif
++
+ SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)
+ {
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
++#endif
+ 	return do_faccessat(dfd, filename, mode);
+ }
+ 
+diff --git a/fs/stat.c b/fs/stat.c
+index 376543199b5a..7c4b6638c1cf 100644
+--- a/fs/stat.c
++++ b/fs/stat.c
+@@ -353,6 +353,13 @@ SYSCALL_DEFINE2(newlstat, const char __user *, filename,
+ 	return cp_new_stat(&stat, statbuf);
+ }
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++__attribute__((hot))
++extern int ksu_handle_stat(int *dfd, const char __user **filename_user,
++				int *flags);
++extern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);
++#endif
++
+ #if !defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_SYS_NEWFSTATAT)
+ SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
+ 		struct stat __user *, statbuf, int, flag)
+@@ -360,6 +367,9 @@ SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
+ 	struct kstat stat;
+ 	int error;
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_stat(&dfd, &filename, &flag);
++#endif
+ 	error = vfs_fstatat(dfd, filename, &stat, flag);
+ 	if (error)
+ 		return error;
+@@ -375,6 +385,9 @@ SYSCALL_DEFINE2(newfstat, unsigned int, fd, struct stat __user *, statbuf)
+ 	if (!error)
+ 		error = cp_new_stat(&stat, statbuf);
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_newfstat_ret(&fd, &statbuf);
++#endif
+ 	return error;
+ }
+ 
+@@ -493,6 +506,10 @@ SYSCALL_DEFINE2(lstat64, const char __user *, filename,
+ 	return error;
+ }
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++extern void ksu_handle_fstat64_ret(unsigned long *fd, struct stat64 __user **statbuf_ptr);
++#endif
++
+ SYSCALL_DEFINE2(fstat64, unsigned long, fd, struct stat64 __user *, statbuf)
+ {
+ 	struct kstat stat;
+@@ -501,6 +518,9 @@ SYSCALL_DEFINE2(fstat64, unsigned long, fd, struct stat64 __user *, statbuf)
+ 	if (!error)
+ 		error = cp_new_stat64(&stat, statbuf);
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_fstat64_ret(&fd, &statbuf);
++#endif
+ 	return error;
+ }
+ 
+@@ -510,6 +530,9 @@ SYSCALL_DEFINE4(fstatat64, int, dfd, const char __user *, filename,
+ 	struct kstat stat;
+ 	int error;
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_stat(&dfd, &filename, &flag);
++#endif
+ 	error = vfs_fstatat(dfd, filename, &stat, flag);
+ 	if (error)
+ 		return error;
+diff --git a/kernel/reboot.c b/kernel/reboot.c
+index c5898ff1a316..c1f2f10e07a8 100644
+--- a/kernel/reboot.c
++++ b/kernel/reboot.c
+@@ -312,6 +312,10 @@ DEFINE_MUTEX(system_transition_mutex);
+  *
+  * reboot doesn't sync: do that yourself before calling this.
+  */
++#ifdef CONFIG_KSU_MANUAL_HOOK
++extern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg);
++#endif
++
+ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
+ 		void __user *, arg)
+ {
+@@ -319,6 +323,10 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
+ 	char buffer[256];
+ 	int ret = 0;
+ 
++#ifdef CONFIG_KSU_MANUAL_HOOK
++	ksu_handle_sys_reboot(magic1, magic2, cmd, &arg);
++#endif
++
+ 	/* We only trust the superuser with rebooting the system. */
+ 	if (!ns_capable(pid_ns->user_ns, CAP_SYS_BOOT))
+ 		return -EPERM;
