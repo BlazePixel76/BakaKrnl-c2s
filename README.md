@@ -48,14 +48,15 @@ Flashable `.tar` builds are on the [Releases](../../releases) tab of this repo.
 
 ## Credits
 
-- **LineageOS Team** — `universal9830` device kernel source
+- **[LineageOS Team](https://github.com/lineageos)** — `universal9830` device kernel source
 - **[weishu](https://github.com/tiann)** and the **KernelSU** project — the
   original kernel-based root solution this is all built on
 - **[Baka-SU](https://github.com/Baka-SU/BakaSU)** (formerly ReSukiSU) — the
   KernelSU fork and manual-hook implementation this kernel actually runs
-- **BlazePixel76** — hook integration for this device, build scripts
 
 ## License
+
+**Copyright © 2026 BlazePixel**
 
 This kernel is Linux, licensed under **GPL-2.0-only**. See [LICENSE](LICENSE).
 The scripts in this repo are provided under the same terms unless noted
