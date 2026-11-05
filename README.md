@@ -33,6 +33,8 @@ automates the process.
 ## Downloads
 
 Flashable `.tar` builds are on the [Releases](../../releases) tab of this repo.
+For The BakaSU Manager Download Here [BakaSU Manager APK](https://nightly.link/Baka-SU/BakaSU/workflows/build-manager/main)
+(Make Sure You Click On The manager-release .zip and download it and extract and then For APK Use the arm64-v8a Version And Install it And Volla Your done.
 
 ## Building it yourself
 
